@@ -183,11 +183,13 @@ def run():
 
         print("[STEP] Opening Medium URL...", flush=True)
         page.goto(
-            "https://medium.com/new-story?source=home---two_column_layout_nav-----------------------------------------",
+            "https://medium.com/",
             wait_until="load"
         )
         print("[OK] Medium URL opened completely (Logged In)", flush=True)
-        custom_random_wait(6, 12)
+        custom_random_wait(15, 30)
+        page.get_by_test_id('headerWriteButton').click()
+        custom_random_wait(15, 30)
         
         # ============================================
         # EDITOR WORKFLOW

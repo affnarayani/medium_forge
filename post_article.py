@@ -134,6 +134,28 @@ def load_article_data(file_path: str) -> Dict[str, Any]:
 def run():
     print("[START] Script started", flush=True)
 
+    # =========================
+    # STATUS CHECK
+    # =========================
+    status_file = Path("status.json")
+    if not status_file.exists():
+        print("[ERROR] status.json file nahi mila. Exiting...", flush=True)
+        sys.exit(0)
+        
+    try:
+        with status_file.open("r", encoding="utf-8") as f:
+            status_data = json.load(f)
+    except Exception as e:
+        print(f"[ERROR] status.json parse nahi ho paya: {e}. Exiting...", flush=True)
+        sys.exit(0)
+
+    # Dono true hone par hi aage badhega, nahi toh exit (0) ho jayega
+    if status_data.get("generate_content") is not True or status_data.get("generate_image") is not True:
+        print("[INFO] Condition match nahi hui (Dono true nahi hain). Exiting safely...", flush=True)
+        sys.exit(0)
+        
+    print("[OK] Status check passed. Proceeding to Medium publishing...", flush=True)
+
     if not os.path.exists(IMAGE_PATH):
         print(f"[ERROR] Required image file not found at: {IMAGE_PATH}. Exiting process.", flush=True)
         sys.exit(1)
@@ -416,6 +438,16 @@ def run():
         final_publish_btn.wait_for(state="visible")
         final_publish_btn.click()
         print("[SUCCESS] Article successfully published!", flush=True)
+
+        # =========================
+        # RESET STATUS TO FALSE
+        # =========================
+        print("[STEP] Resetting status.json to false...", flush=True)
+        status_data["generate_content"] = False
+        status_data["generate_image"] = False
+        with status_file.open("w", encoding="utf-8") as f:
+            json.dump(status_data, f, indent=4, ensure_ascii=False)
+        print("[OK] status.json successfully reset (content=False, image=False)", flush=True)
 
         long_publish_wait()
 

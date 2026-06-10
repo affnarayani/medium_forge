@@ -178,6 +178,28 @@ def get_random_promo_link() -> str:
 def run():
     print("[START] Script started", flush=True)
 
+    # =========================
+    # STATUS CHECK
+    # =========================
+    status_file = Path("status.json")
+    if not status_file.exists():
+        print("[ERROR] status.json file nahi mila. Exiting...", flush=True)
+        sys.exit(0)
+        
+    try:
+        with status_file.open("r", encoding="utf-8") as f:
+            status_data = json.load(f)
+    except Exception as e:
+        print(f"[ERROR] status.json parse nahi ho paya: {e}. Exiting...", flush=True)
+        sys.exit(0)
+
+    # Dono false hone par hi aage badhega, nahi toh exit (0) ho jayega
+    if status_data.get("generate_content") is not False or status_data.get("generate_image") is not False:
+        print("[INFO] Condition match nahi hui (Dono false nahi hain). Exiting safely...", flush=True)
+        sys.exit(0)
+        
+    print("[OK] Status check passed. Proceeding...", flush=True)
+
     # File init/clear at the beginning
     article_file = Path("article.json")
 
@@ -392,6 +414,16 @@ def run():
                 
                 # Success validation achieved: Safe to remove topic now
                 remove_last_topic_from_file()
+
+                # =========================
+                # UPDATE STATUS
+                # =========================
+                print("[STEP] Updating status.json...", flush=True)
+                status_data["generate_content"] = True
+                status_data["generate_image"] = False  # Yeh already false hai, par explicit rakh rahe hain
+                with status_file.open("w", encoding="utf-8") as f:
+                    json.dump(status_data, f, indent=4, ensure_ascii=False)
+                print("[OK] status.json successfully updated (generate_content=True)", flush=True)
                 
             except json.JSONDecodeError as je:
                 print(f"[ERROR] Content JSON parse karne me fail hua: {je}. Exiting script...", flush=True)

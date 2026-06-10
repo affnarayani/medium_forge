@@ -138,6 +138,28 @@ def run():
     
     print("[START] Script started", flush=True)
 
+    # =========================
+    # STATUS CHECK
+    # =========================
+    status_file = Path("status.json")
+    if not status_file.exists():
+        print("[ERROR] status.json file nahi mila. Exiting...", flush=True)
+        sys.exit(0)
+        
+    try:
+        with status_file.open("r", encoding="utf-8") as f:
+            status_data = json.load(f)
+    except Exception as e:
+        print(f"[ERROR] status.json parse nahi ho paya: {e}. Exiting...", flush=True)
+        sys.exit(0)
+
+    # Sirf tabhi chalega jab generate_content == True aur generate_image == False ho
+    if status_data.get("generate_content") is not True or status_data.get("generate_image") is not False:
+        print("[INFO] Condition match nahi hui (generate_content True aur generate_image False hona chahiye). Exiting safely...", flush=True)
+        sys.exit(0)
+        
+    print("[OK] Status check passed. Proceeding to image generation...", flush=True)
+
     cookies = load_cookies(Path(CHATGPT_COOKIES_FILE))
 
     # =========================
@@ -347,6 +369,13 @@ def run():
                 
                 print("[STEP] Performing final random wait before exit (30-60 seconds)...", flush=True)
                 custom_random_wait(30, 60)
+
+                # Update status to both True
+                status_data["generate_content"] = True
+                status_data["generate_image"] = True
+                with status_file.open("w", encoding="utf-8") as f:
+                    json.dump(status_data, f, indent=4, ensure_ascii=False)
+
                 print("[DONE] Kahaani Khatam! Direct download successfully processed.", flush=True)
                 return  # Direct skip complete workflow and finish script cleanly
                 
@@ -394,6 +423,13 @@ def run():
                     print(f"✅ Original dimensions image successfully saved via Fallback 1: {local_filename}", flush=True)
                     print("[STEP] Performing final random wait before exit (30-60 seconds)...", flush=True)
                     custom_random_wait(30, 60)
+
+                    # Update status to both True
+                    status_data["generate_content"] = True
+                    status_data["generate_image"] = True
+                    with status_file.open("w", encoding="utf-8") as f:
+                        json.dump(status_data, f, indent=4, ensure_ascii=False)
+
                     print("[DONE] Kahaani Khatam! Saved via Fallback 1 image extraction.", flush=True)
                     return
                 else:
@@ -433,6 +469,13 @@ def run():
                 
                 print("[STEP] Performing final random wait before exit (30-60 seconds)...", flush=True)
                 custom_random_wait(30, 60)
+
+                # Update status to both True
+                status_data["generate_content"] = True
+                status_data["generate_image"] = True
+                with status_file.open("w", encoding="utf-8") as f:
+                    json.dump(status_data, f, indent=4, ensure_ascii=False)
+
                 print("[DONE] Kahaani Khatam! Downloaded directly from pop-up.", flush=True)
                 return
         except Exception as popup_dl_err:
@@ -481,6 +524,12 @@ def run():
                 download.save_as(local_filename)
                 print(f"✅ Original resolution high quality image downloaded successfully (Saved to image directory): {local_filename}", flush=True)
                 
+                # Update status to both True
+                status_data["generate_content"] = True
+                status_data["generate_image"] = True
+                with status_file.open("w", encoding="utf-8") as f:
+                    json.dump(status_data, f, indent=4, ensure_ascii=False)
+                    
             except Exception as download_err:
                 print(f"❌ Error during 'Save' button download processing: {download_err}", flush=True)
                 sys.exit(1)

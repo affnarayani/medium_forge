@@ -21,7 +21,7 @@ from playwright_stealth import Stealth
 # =========================
 # CONFIG
 # =========================
-HEADLESS = True
+HEADLESS = True  
 
 MEDIUM_COOKIES_FILE = "medium_cookies.json.encrypted"
 ARTICLE_FILE = "article.json"
@@ -30,17 +30,6 @@ IMAGE_PATH = "image/pin.png"
 PBKDF2_ITERATIONS = 200_000
 
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-
-
-# =========================
-# ENV
-# =========================
-load_dotenv()
-
-DECRYPT_KEY = os.getenv("DECRYPT_KEY")
-
-if not DECRYPT_KEY:
-    raise RuntimeError("DECRYPT_KEY missing")
 
 
 # =========================
@@ -97,7 +86,14 @@ def load_cookies(file_path: Path) -> List[Dict[str, Any]]:
     with file_path.open("r", encoding="utf-8") as f:
         payload = json.load(f)
 
-    plaintext = _decrypt_payload(payload, DECRYPT_KEY)
+    plaintext = _derive_key(DECRYPT_KEY.encode("utf-8"), base64.b64decode(payload["s"]))
+    aesgcm = AESGCM(plaintext)
+    
+    try:
+        plaintext = aesgcm.decrypt(base64.b64decode(payload["n"]), base64.b64decode(payload["ct"]), None)
+    except InvalidTag:
+        raise RuntimeError("❌ Decryption failed (InvalidTag)")
+
     cookies = json.loads(plaintext.decode("utf-8"))
 
     for c in cookies:
@@ -146,13 +142,11 @@ def run():
     print(f"[OK] Total cookies loaded: {len(cookies)}", flush=True)
 
     article_data = load_article_data(ARTICLE_FILE)
-    article_title = article_data.get("title", "Untitled Story")
     
-    # Naye json se keywords extract karna (Default empty list agar key missing ho)
+    article_title = article_data.get("title", "Untitled Story")
     chosen_keywords = article_data.get("keywords", [])
     print(f"[OK] Extracted keywords from JSON: {chosen_keywords}", flush=True)
 
-    # Content keys nikalte waqt 'title' aur 'keywords' dono ko exclude kar rahe hain
     raw_keys = [k for k in article_data.keys() if k not in ["title", "keywords"]]
     content_keys = [key for key in raw_keys]
 
@@ -162,6 +156,9 @@ def run():
     stealth = Stealth()
     pw_cm = stealth.use_sync(sync_playwright())
     pw = pw_cm.__enter__()
+
+    browser = None
+    page = None
 
     try:
         browser = pw.chromium.launch(
@@ -192,9 +189,9 @@ def run():
         print("[OK] Medium URL opened completely (Logged In)", flush=True)
         custom_random_wait(6, 12)
         
-        # =========================
+        # ============================================
         # EDITOR WORKFLOW
-        # =========================
+        # ============================================
         
         # 1. Title Input
         print("[STEP] Entering Title...", flush=True)
@@ -263,21 +260,33 @@ def run():
                 print(f"[STEP] Hyperlink formatting detected for p_cta", flush=True)
                 
                 parts = para_text.split("http")
-                display_text = parts[0].strip().rstrip(":")
+                display_text = parts[0].strip()
                 target_url = "http" + parts[1].strip()
                 
-                for char in display_text:
+                clean_display_text = display_text.replace(":", "").strip()
+                
+                for char in clean_display_text:
                     page.keyboard.type(char)
                     time.sleep(random.uniform(0.03, 0.12))
                 
                 custom_random_wait(2, 4)
                 
-                print(f"[STEP] Selecting text for embedding hyperlink...", flush=True)
-                page.keyboard.down("Shift")
-                for _ in range(len(display_text)):
-                    page.keyboard.press("ArrowLeft")
-                    time.sleep(0.02)
-                page.keyboard.up("Shift")
+                target_selection = "Click Here to Download This Ebook"
+                
+                if target_selection in clean_display_text:
+                    print(f"[STEP] Targeting exact anchor text string for selection...", flush=True)
+                    page.keyboard.down("Shift")
+                    for _ in range(len(target_selection)):
+                        page.keyboard.press("ArrowLeft")
+                        time.sleep(0.02)
+                    page.keyboard.up("Shift")
+                else:
+                    print(f"[WARNING] Exact anchor match not found, falling back to full block selection...", flush=True)
+                    page.keyboard.down("Shift")
+                    for _ in range(len(clean_display_text)):
+                        page.keyboard.press("ArrowLeft")
+                        time.sleep(0.02)
+                    page.keyboard.up("Shift")
                 
                 custom_random_wait(2, 4)
                 
@@ -294,14 +303,57 @@ def run():
                 custom_random_wait(2, 4)
                 
                 print(f"[STEP] Pressing 1st Enter to embed/save the link...", flush=True)
-                link_input.press("Enter")
+                link_input.press("Enter")  # 🟢 Isse link save hokar cursor auto next line par aa jata hai.
                 custom_random_wait(2, 4)
                 
-                print(f"[STEP] Pressing 2nd Enter to break into next paragraph block...", flush=True)
-                page.keyboard.press("Enter")
+                page.keyboard.press("ArrowRight")
+                time.sleep(0.5)
+
+                # 🟢 FIX: Extra page.keyboard.press("Enter") ko hata diya gaya hai taaki extra empty line break na bane.
                 custom_random_wait(6, 12)
                 
-                print(f"[OK] Paragraph ({key}) finished typing (hyperlink + block break handled)", flush=True)
+                print(f"[OK] Paragraph ({key}) finished typing (hyperlink handled)", flush=True)
+                continue
+
+            elif key == "conclusion":
+                subheading_text = "Conclusion"
+                print(f"[STEP] Typing heading text: '{subheading_text}'...", flush=True)
+                for char in subheading_text:
+                    page.keyboard.type(char)
+                    time.sleep(random.uniform(0.04, 0.12))
+                custom_random_wait(2, 4)
+
+                print(f"[STEP] Selecting heading text...", flush=True)
+                page.keyboard.down("Shift")
+                for _ in range(len(subheading_text)):
+                    page.keyboard.press("ArrowLeft")
+                    time.sleep(0.03)
+                page.keyboard.up("Shift")
+                custom_random_wait(2, 4)
+
+                print("[STEP] Pressing Control+Alt+1 shortcut to increase font...", flush=True)
+                page.keyboard.press("Control+Alt+2")
+                custom_random_wait(2, 4)
+
+                print("[STEP] Deselecting header text to prevent block deletion...", flush=True)
+                page.keyboard.press("ArrowRight")
+                time.sleep(0.5)
+                
+                print("[STEP] Pressing Enter to break line...", flush=True)
+                page.keyboard.press("Enter")
+                custom_random_wait(4, 8)
+
+                print("[STEP] Injecting main conclusion body paragraphs...", flush=True)
+                for char in para_text:
+                    page.keyboard.type(char)
+                    time.sleep(random.uniform(0.03, 0.10))
+                
+                print("[OK] Conclusion block handled successfully", flush=True)
+                custom_random_wait(6, 12)
+                
+                print(f"[STEP] Pressing Enter to create next section break...", flush=True)
+                page.keyboard.press("Enter")
+                custom_random_wait(6, 12)
                 continue
                 
             else:
@@ -318,9 +370,9 @@ def run():
 
         print("[SUCCESS] All dynamic contents appended safely.", flush=True)
 
-        # =========================
+        # ============================================
         # PUBLISHING WORKFLOW
-        # =========================
+        # ============================================
         print("[STEP] Post-writing cool down phase...", flush=True)
         long_publish_wait()
 
@@ -333,7 +385,7 @@ def run():
         
         long_publish_wait()
 
-        # 2. Add Topics / Keywords (Ab direct variables JSON se aa rahe hain)
+        # 2. Add Topics / Keywords
         if chosen_keywords:
             print("[STEP] Locating 'Add a topic...' combobox input...", flush=True)
             topic_input = page.get_by_role('combobox', name='Add a topic...')
@@ -346,12 +398,10 @@ def run():
                 for char in kw:
                     page.keyboard.type(char)
                     time.sleep(random.uniform(0.05, 0.15))
-                    
-                keyword_short_wait()
                 
+                keyword_short_wait()
                 print(f"[STEP] Pressing Enter to lock tag '{kw}'...", flush=True)
                 page.keyboard.press("Enter")
-                
                 keyword_short_wait()
 
             long_publish_wait()
@@ -371,13 +421,26 @@ def run():
         raise
     except Exception as e:
         print("[ERROR] Automation cycle broke or publish failed due to runtime trace:", e, flush=True)
+        if page is not None:
+            try:
+                page.screenshot(path="error_screenshot.png", full_page=True)
+                print("[OK] Error screenshot saved to error_screenshot.png", flush=True)
+            except Exception as screenshot_err:
+                print(f"[WARNING] Could not take screenshot: {screenshot_err}", flush=True)
+        
+        if browser:
+            try:
+                browser.close()
+            except:
+                pass
         sys.exit(1)
 
     finally:
-        try:
-            browser.close()
-        except:
-            pass
+        if browser:
+            try:
+                browser.close()
+            except:
+                pass
 
         try:
             pw_cm.__exit__(None, None, None)
@@ -388,4 +451,8 @@ def run():
 
 
 if __name__ == "__main__":
+    load_dotenv()
+    DECRYPT_KEY = os.getenv("DECRYPT_KEY")
+    if not DECRYPT_KEY:
+        raise RuntimeError("DECRYPT_KEY missing")
     run()

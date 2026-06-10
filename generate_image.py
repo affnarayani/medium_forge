@@ -18,7 +18,6 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.exceptions import InvalidTag
 
 from playwright.sync_api import sync_playwright
-from huggingface_hub import InferenceClient
 
 from playwright_stealth import Stealth
 
@@ -52,14 +51,9 @@ USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTM
 load_dotenv()
 
 DECRYPT_KEY = os.getenv("DECRYPT_KEY")
-HF_TOKEN = os.getenv("HF_TOKEN")
 
 if not DECRYPT_KEY:
     raise RuntimeError("DECRYPT_KEY missing")
-
-if not HF_TOKEN:
-    raise RuntimeError("HF_TOKEN missing")
-
 
 # =========================
 # RANDOM WAIT
@@ -140,6 +134,18 @@ def load_cookies(file_path: Path) -> List[Dict[str, Any]]:
 # MAIN
 # =========================
 def run():
+    article_file = Path("article.json")
+    
+    if article_file.exists():
+        try:
+            with article_file.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+                if data.get("posted") is True:
+                    print("[INFO] Article has already been posted. Skipping Image Generation.", flush=True)
+                    sys.exit(0)
+        except Exception as e:
+            print(f"[WARNING] Could not read article.json: {e}, proceeding anyway...", flush=True)
+    
     print("[START] Script started", flush=True)
 
     cookies = load_cookies(Path(CHATGPT_COOKIES_FILE))
@@ -150,8 +156,11 @@ def run():
     print("[STEP] Loading article JSON...", flush=True)
     with open("article.json", "r", encoding="utf-8") as json_file:
         article_data = json.load(json_file)
-    article_title = article_data.get("title", "Mental Clarity")
+    article_title = article_data["title"]
     print(f"[OK] Article Title extracted: {article_title}", flush=True)
+
+    article_keywords = article_data["keywords"]
+    print(f"[OK] Article Keywords extracted: {article_keywords}", flush=True)
 
     print(f"[OK] Total cookies loaded: {len(cookies)}", flush=True)
 
@@ -188,73 +197,31 @@ def run():
 
         print("[OK] Cookies added successfully", flush=True)
 
-        # ========================================================
-        # HUGGING FACE OPTIMIZED PROMPT GENERATION
-        # ========================================================
-        print("[STEP] Initializing Hugging Face InferenceClient...", flush=True)
-        client = InferenceClient(model="meta-llama/Meta-Llama-3-8B-Instruct", token=HF_TOKEN)
-
-        hf_prompt = (
+        prompt = (
             "You are an expert AI image prompt engineer specializing in editorial and article cover visuals. "
-            "Based on the following eBook/article details, write a highly descriptive, cinematic, and emotionally resonant image generation prompt "
+            "Based on the following article details, write a highly descriptive, cinematic, and emotionally resonant image generation prompt "
             "suitable for a Medium article header image. The image should NOT look like a book cover. "
             "Instead, it should feel like a high-quality editorial photograph or digital artwork — "
             "think conceptual, atmospheric, and thought-provoking, the kind used in top Medium publications. "
             "The scene should metaphorically represent the core theme without showing any text, titles, or book covers. "
-            "Vary the visual style freely — it could be surreal illustration, cinematic photography, abstract art, "
-            "minimalist concept art, or moody atmospheric scene — as long as it captures the emotional essence. "
+            "Vary the visual style intentionally — choose ONE of the following that best fits the article's emotional tone: "
+            "surreal illustration, cinematic photography, abstract art, minimalist concept art, or moody atmospheric scene. "
+            "Do NOT default to clichéd imagery like figures surrounded by swirling thoughts or cracked heads. "
+            "Push toward unexpected, elegant, and original visual metaphors that feel fresh and premium. "
             "Respond ONLY with the final optimized image prompt text. Do not include any introduction, explanation, or markdown.\n\n"
-            "Article/eBook Topic Details:\n"
-            f"Core Theme / Main Concept: {article_title}\n"
-            "Key Ideas Covered:\n"
-            "- Why the brain is constantly overwhelmed and distracted\n"
-            "- The psychology of overthinking and mental clutter\n"
-            "- The impact of phones, social media, and information overload\n"
-            "- How to develop calm, focused thinking\n"
-            "- Practical steps to regain mental clarity and inner stillness\n"
-            "Emotional Journey:\n"
-            "- From: Mentally exhausted, scattered, anxious, overwhelmed by noise\n"
-            "- To: Clear-minded, calm, focused, and at peace\n"
-            "Visual Direction Hints (use creatively, do not copy literally):\n"
-            "- A figure standing in silence amid chaotic swirling thoughts\n"
-            "- A mind transitioning from storm to stillness\n"
-            "- Empty space, fog clearing, a single calm focal point\n"
-            "- Contrast between noise and silence, darkness and soft light\n"
-            "The image must feel editorial, premium, and suitable as a Medium article hero image. No text, no book covers, no logos."
+            "Article Details:\n"
+            f"Title: {article_title}\n"
+            f"Core Keywords: {', '.join(article_keywords)}\n"
+            "STRICT RULES: No text, no words, no letters, no book covers, no logos anywhere in the image. "
+            "Suitable as a Medium article hero image."
         )
-
-        print("[STEP] Requesting optimized prompt from Llama-3 model using chat completions...", flush=True)
-        hf_generated_prompt = ""
-        
-        try:
-            res = client.chat.completions.create(
-                messages=[{"role": "user", "content": hf_prompt}],
-                max_tokens=300,
-                temperature=0.7,
-            )
-            
-            raw_content = res.choices[0].message.content
-            if raw_content:
-                hf_generated_prompt = raw_content.replace("**", "").replace("*", "").strip()
-                # Remove leading/trailing quotes if any
-                hf_generated_prompt = re.sub(r'^["\']|["\']$', '', hf_generated_prompt).strip()
-                
-        except Exception as hf_err:
-            print(f"[ERROR] Hugging Face prompt generation failed: {hf_err}", flush=True)
-
-        # STRICT REQUIREMENT: If empty or generation failed, exit with error code 1
-        if not hf_generated_prompt:
-            print("❌ Error: HF prompt generation failed or returned empty content. Exiting program.", flush=True)
-            sys.exit(1)
-
-        print("[OK] Successfully received prompt from Hugging Face", flush=True)
         # ========================================================
 
         print("[STEP] Opening ChatGPT Main URL...", flush=True)
 
         page.goto(
             "https://chatgpt.com/",
-            wait_until="networkidle"
+            wait_until="load"
         )
 
         print("[OK] URL opened", flush=True)
@@ -263,13 +230,70 @@ def run():
         print("[STEP] Performing initial random wait (30-60 seconds)...", flush=True)
         custom_random_wait(30, 60)
 
-        # 2. Locate chat box and type prompt
+        # ============================================
+        # NEW: CHECK LOGIN SUCCESS VIA USER PROFILE BUTTON
+        # ============================================
+        print("[STEP] Checking login success via profile button...", flush=True)
+        profile_button = page.get_by_role('button', name=list(map(lambda x: x.compile(r'.*Free, open'), [__import__('re')]))[0])
+        
+        if profile_button.count() > 0:
+            print(f"[OK] LOGIN SUCCESS: Profile button found -> '{profile_button.first.get_attribute('aria-label') or 'User Account'}'", flush=True)
+        else:
+            print("[WARNING] Profile button not detected directly, proceeding with caution...", flush=True)
+
+        # ============================================
+        # 2. Locate chat box and type prompt (With Fallbacks)
+        # ============================================
         print("[STEP] Locating chat textbox...", flush=True)
         chat_box = page.get_by_role('textbox', name='Chat with ChatGPT')
         
-        prompt_text = f"Generate a photorealistic or artistic editorial image with a size strictly of 1672x941 px at a 16:9 aspect ratio. The image should serve as a compelling Medium article header — no text, no overlays, no book covers. Depict the following scene in high detail and cinematic quality: {hf_generated_prompt}"
+        if chat_box.count() == 0:
+            print("[INFO] Fallback 1: Searching for 'Describe or edit an image' paragraph inside textbox context...", flush=True)
+            chat_box = page.locator('div[contenteditable="true"]').filter(has=page.locator('p', has_text='Describe or edit an image')).first
+            
+        if chat_box.count() == 0:
+            print("[INFO] Fallback 2: Searching via CSS Selector '#prompt-textarea'...", flush=True)
+            chat_box = page.locator('#prompt-textarea')
+
+        # Trigger action if found
+        if chat_box.count() > 0:
+            chat_box.first.click()
+            print("[OK] Textbox located and clicked successfully.", flush=True)
+        else:
+            raise RuntimeError("❌ Textbox locator load nahi ho paya (All strategies failed).")
+        
+        image_selection_text = f"/createimage"
+        print(f"[STEP] Filling prompt: '{image_selection_text}'", flush=True)
+        chat_box.first.fill(image_selection_text)
+        
+        page.keyboard.press("Enter")
+        print("[OK] Prompt sent successfully", flush=True)
+        custom_random_wait(3, 6)
+
+        # ============================================
+        # 2.1 Locate chat box and type prompt (With Fallbacks)
+        # ============================================
+        print("[STEP] Locating chat textbox...", flush=True)
+        chat_box = page.get_by_role('textbox', name='Chat with ChatGPT')
+        
+        if chat_box.count() == 0:
+            print("[INFO] Fallback 1: Searching for 'Ask anything' paragraph inside textbox context...", flush=True)
+            chat_box = page.locator('div[contenteditable="true"]').filter(has=page.locator('p', has_text='Ask anything')).first
+            
+        if chat_box.count() == 0:
+            print("[INFO] Fallback 2: Searching via CSS Selector '#prompt-textarea'...", flush=True)
+            chat_box = page.locator('#prompt-textarea')
+
+        # Trigger action if found
+        if chat_box.count() > 0:
+            chat_box.first.click()
+            print("[OK] Textbox located and clicked successfully.", flush=True)
+        else:
+            raise RuntimeError("❌ Textbox locator load nahi ho paya (All strategies failed).")
+        
+        prompt_text = f"Generate a photorealistic or artistic editorial image with a size strictly of 1672x941 px at a 16:9 aspect ratio. The image should serve as a compelling Medium article header — no text, no overlays, no book covers. Depict the following scene in high detail and cinematic quality: {prompt}"
         print(f"[STEP] Filling prompt: '{prompt_text}'", flush=True)
-        chat_box.fill(prompt_text)
+        chat_box.first.fill(prompt_text)
         
         page.keyboard.press("Enter")
         print("[OK] Prompt sent successfully", flush=True)
@@ -314,6 +338,84 @@ def run():
             print("❌ Error: 'Share this image' button not found after 5 retries. Exiting program.", flush=True)
             sys.exit(1)
 
+        # ========================================================
+        # IMPLEMENTATION: DIRECT DOWNLOAD CHECK LOGIC
+        # ========================================================
+        print("[STEP] Checking if direct 'Download' button is available on main page...", flush=True)
+        direct_download_btn = page.get_by_role('button', name='Download').first
+        
+        if direct_download_btn.is_visible():
+            print("✅ Direct 'Download' button found! Initiating direct download...", flush=True)
+            try:
+                with page.expect_download(timeout=60000) as download_info:
+                    direct_download_btn.click()
+                
+                download = download_info.value
+                local_filename = IMAGE_DIR / "pin.png"
+                download.save_as(local_filename)
+                print(f"✅ Original resolution image downloaded directly (Saved to image directory): {local_filename}", flush=True)
+                
+                print("[STEP] Performing final random wait before exit (30-60 seconds)...", flush=True)
+                custom_random_wait(30, 60)
+                print("[DONE] Kahaani Khatam! Direct download successfully processed.", flush=True)
+                return  # Direct skip complete workflow and finish script cleanly
+                
+            except Exception as direct_dl_err:
+                print(f"[WARNING] Direct download triggered error, falling back to next strategies: {direct_dl_err}", flush=True)
+
+        # ========================================================
+        # NEW FALLBACK 1: SAVE IMAGE FROM 'Generated image: .*' ROLE
+        # ========================================================
+        print("[STEP] Executing Fallback 1: Searching for Generated image container...", flush=True)
+        try:
+            generated_image_btn = page.get_by_role('button', name=re.compile(r'Generated image:.*', re.IGNORECASE)).first
+            if generated_image_btn.is_visible():
+                print("✅ Generated image area located via regex. Extracting inner image element...", flush=True)
+                
+                # Container ke andar se img tag dhoond kar uska src nikalna
+                img_element = generated_image_btn.locator('img').first
+                img_src = img_element.get_attribute('src')
+                
+                if img_src:
+                    local_filename = IMAGE_DIR / "pin.png"
+                    
+                    # Agar blob URL hai toh browser ke execute script ke throug fetch karke base64 save karenge
+                    if img_src.startswith('blob:'):
+                        print("[INFO] Blob URL detected. Extracting image data directly from browser context...", flush=True)
+                        base64_data = page.evaluate("""async (url) => {
+                            const response = await fetch(url);
+                            const blob = await response.blob();
+                            return new Promise((resolve) => {
+                                const reader = new FileReader();
+                                reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                                reader.readAsDataURL(blob);
+                            });
+                        }""", img_src)
+                        
+                        with open(local_filename, "wb") as fh:
+                            fh.write(base64.b64decode(base64_data))
+                    else:
+                        # Normal URL hai toh context cookies ke sath direct stream save karenge
+                        print(f"[INFO] Standard image URL detected. Downloading element source...", flush=True)
+                        img_response = page.request.get(img_src)
+                        with open(local_filename, "wb") as fh:
+                            fh.write(img_response.body())
+                            
+                    print(f"✅ Original dimensions image successfully saved via Fallback 1: {local_filename}", flush=True)
+                    print("[STEP] Performing final random wait before exit (30-60 seconds)...", flush=True)
+                    custom_random_wait(30, 60)
+                    print("[DONE] Kahaani Khatam! Saved via Fallback 1 image extraction.", flush=True)
+                    return
+                else:
+                    print("[WARNING] Image element found but 'src' attribute was empty.", flush=True)
+        except Exception as fallback_one_err:
+            print(f"[WARNING] Fallback 1 extraction method failed: {fallback_one_err}, falling back to share link flow.", flush=True)
+
+        # ========================================================
+        # FALLBACK 2: ORIGINAL POPUP & NEW TAB WORKFLOW (Moved here if both above fail)
+        # ========================================================
+        print("[INFO] Moving forward with Fallback 2 workflow (New Tab / Share Link Method)...", flush=True)
+
         # Clear clipboard
         page.evaluate("() => navigator.clipboard.writeText('')")
 
@@ -323,6 +425,28 @@ def run():
         
         # Pop-up load hone ke liye chhota sa wait
         custom_random_wait(15, 30)
+
+        # ========================================================
+        # POPUP DOWNLOAD CHECK LOGIC
+        # ========================================================
+        try:
+            popup_download_btn = page.get_by_role('button', name='Download').first
+            if popup_download_btn.is_visible():
+                print("✅ 'Download' button found inside the Copy Link pop-up! Initiating download...", flush=True)
+                with page.expect_download(timeout=60000) as download_info:
+                    popup_download_btn.click()
+                
+                download = download_info.value
+                local_filename = IMAGE_DIR / "pin.png"
+                download.save_as(local_filename)
+                print(f"✅ Original resolution image downloaded from pop-up successfully: {local_filename}", flush=True)
+                
+                print("[STEP] Performing final random wait before exit (30-60 seconds)...", flush=True)
+                custom_random_wait(30, 60)
+                print("[DONE] Kahaani Khatam! Downloaded directly from pop-up.", flush=True)
+                return
+        except Exception as popup_dl_err:
+            print(f"[INFO] Pop-up direct download failed or not found, continuing with link copy: {popup_dl_err}", flush=True)
 
         # HACK: Agar 'Copy link' button wala pop-up aata hai toh uspar click karega
         try:
@@ -352,7 +476,7 @@ def run():
             
             # Intercept download event loop
             try:
-                save_btn = shared_page.get_by_role('button', name='Save').first
+                save_btn = shared_page.get_by_role('button', name='Save').first.or_(shared_page.get_by_role('button', name='Save'))
                 
                 # Setup download watcher to capture file stream natively
                 with shared_page.expect_download(timeout=60000) as download_info:
@@ -369,7 +493,7 @@ def run():
                 
             except Exception as download_err:
                 print(f"❌ Error during 'Save' button download processing: {download_err}", flush=True)
-                
+                sys.exit(1)
             # Close shared page tab
             shared_page.close()
         else:
@@ -383,6 +507,18 @@ def run():
         raise
     except Exception as e:
         print("[ERROR]", e, flush=True)
+        # ============================================
+        # NEW: CAPTURE SCREENSHOT ON ERROR
+        # ============================================
+        if 'page' in locals() and page:
+            try:
+                screenshot_path = "error_screenshot.png"
+                page.screenshot(path=screenshot_path, full_page=True)
+                print(f"[OK] Error screenshot captured: {screenshot_path}", flush=True)
+            except Exception as screenshot_err:
+                print(f"[WARNING] Could not capture screenshot: {screenshot_err}", flush=True)
+        # ============================================
+        sys.exit(1)
 
     finally:
         try:

@@ -128,7 +128,7 @@ def get_last_topic() -> str:
     
     with topics_file.open("r", encoding="utf-8") as f:
         lines = [line.strip() for line in f if line.strip()]
-        
+    
     if not lines:
         raise ValueError("❌ 'topics.txt' khali hai.")
     
@@ -180,6 +180,23 @@ def run():
 
     # File init/clear at the beginning
     article_file = Path("article.json")
+
+    # ============================================
+    # NEW: CHECK IF CONTENT IS ALREADY POSTED
+    # ============================================
+    if article_file.exists():
+        try:
+            with article_file.open("r", encoding="utf-8") as f:
+                content = f.read().strip()
+                if content:  # Check if file is not empty
+                    data = json.loads(content)
+                    if data.get("posted") is True:
+                        print("[INFO] Content has already been posted. Aborting process.", flush=True)
+                        sys.exit(0)
+        except json.JSONDecodeError:
+            # Agar JSON invalid hai toh ignore karke aage badhenge taaki nayi file overwrite ho sake
+            print("[WARNING] 'article.json' contains invalid JSON. Proceeding to overwrite...", flush=True)
+    
     with article_file.open("w", encoding="utf-8") as f:
         f.write("")
     print("[OK] 'article.json' cleared/initialized", flush=True)
@@ -227,29 +244,66 @@ def run():
         print("[STEP] Opening ChatGPT Main URL...", flush=True)
         page.goto(
             "https://chatgpt.com/",
-            wait_until="domcontentloaded"
+            wait_until="load"
         )
         print("[OK] URL opened successfully (Logged In)", flush=True)
 
         # 15 to 30 seconds random wait after page load
-        custom_random_wait(15, 30)
+        custom_random_wait(30, 60)
+
+        # ============================================
+        # NEW: CHECK LOGIN SUCCESS VIA USER PROFILE BUTTON
+        # ============================================
+        print("[STEP] Checking login success via profile button...", flush=True)
+        # Matches any user name followed by 'Free, open'
+        profile_button = page.get_by_role('button', name=list(map(lambda x: x.compile(r'.*Free, open'), [__import__('re')]))[0])
+        
+        if profile_button.count() > 0:
+            print(f"[OK] LOGIN SUCCESS: Profile button found -> '{profile_button.first.get_attribute('aria-label') or 'User Account'}'", flush=True)
+        else:
+            print("[WARNING] Profile button not detected directly, proceeding with caution...", flush=True)
 
         # =========================
         # AUTOMATION FLOW
         # =========================
         print("[STEP] Locating chat textbox...", flush=True)
+        
+        # Fallback Strategy for Textbox Locators
         textbox = page.get_by_role('textbox', name='Chat with ChatGPT')
-        textbox.click()
+        
+        if textbox.count() == 0:
+            print("[INFO] Fallback 1: Searching for 'Ask anything' paragraph inside textbox context...", flush=True)
+            textbox = page.locator('div[contenteditable="true"]').filter(has=page.locator('p', has_text='Ask anything')).first
+            
+        if textbox.count() == 0:
+            print("[INFO] Fallback 2: Searching via CSS Selector '#prompt-textarea'...", flush=True)
+            textbox = page.locator('#prompt-textarea')
+
+        # Trigger action if found
+        if textbox.count() > 0:
+            textbox.first.click()
+            print("[OK] Textbox located and clicked successfully.", flush=True)
+        else:
+            raise RuntimeError("❌ Textbox locator load nahi ho paya (All strategies failed).")
+            
         custom_random_wait(15, 30)
 
         # Smart prompt engineering with specific separate paragraph format requirements
         prompt = (
+            f"IMPORTANT: Your entire response must be wrapped in a single ```json code block. "
+            f"Do not print any JSON outside of a code block under any circumstances. "
+            f"Do not add any text, explanation, or markdown before or after the code block.\n\n"
+
             f"Write a highly engaging article for Medium on the topic: '{topic}'.\n"
             f"Length: 800-1200 words.\n\n"
+
             f"CRITICAL PROMOTION REQUIREMENT:\n"
-            f"Do not blend the promotional link inside normal reading paragraphs. Instead, you must allocate a dedicated, standalone paragraph key exactly named \"p_cta\" at a natural, contextually appropriate position roughly in the middle of the article flow.\n"
+            f"You must include a dedicated, standalone paragraph key exactly named \"p_cta\" placed at a natural narrative transition point — roughly in the middle of the article.\n"
+            f"The paragraph IMMEDIATELY BEFORE \"p_cta\" must end on a curiosity-triggering note: it should tease a deeper insight, hint at a practical solution, or raise a compelling question that makes the reader feel they need more.\n"
+            f"The \"p_cta\" paragraph itself must feel like a natural continuation of that curiosity — not a commercial break. It should directly echo the specific language or idea from the preceding paragraph, making the connection feel precise and inevitable. Never use generic reassuring phrases like 'you're not alone' or 'many people feel this way' — the bridge must feel sharp and specific, not comforting.\n"
             f"The value of \"p_cta\" MUST be exactly formatted in this clean structure:\n"
-            f"Click Here to Download This Ebook: {promo_link}\n\n"
+            f"[1-2 sentences bridging from the preceding paragraph's curiosity hook.] Click Here to Download This Ebook: {promo_link}\n\n"
+
             f"OUTPUT FORMATTING:\n"
             f"You MUST deliver the entire article strictly inside a single JSON code block. No conversational text or markdown outside of it.\n"
             f"The JSON structure must match this layout exactly (the 'p_cta' key position is flexible but must be placed naturally between your content paragraphs):\n"
@@ -258,19 +312,21 @@ def run():
             f'  "p1": "Paragraph 1 content...",\n'
             f'  "p2": "Paragraph 2 content...",\n'
             f'  ... \n'
-            f'  "p_cta": "Click Here to Download This Ebook: {promo_link}",\n'
+            f'  "p_cta": "[Bridge sentence(s) continuing from the preceding paragraph.] Click Here to Download This Ebook: {promo_link}",\n'
             f'  ... \n'
             f'  "pn": "Paragraph n content...",\n'
             f'  "conclusion": "Conclusion content...",\n'
             f'  "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"]\n'
             f"}}\n"
+
             f"REMINDER 1: The 'title' value must match exactly with: '{topic}'.\n"
-            f"REMINDER 2: The 'keywords' array MUST contain strictly exactly 5 relevant keywords for the article.\n"
-            f"REMINDER 3: Place 'p_cta' dynamically where it naturally fits the narrative transition, do not force it strictly after paragraph 2."
+            f"REMINDER 2: The 'keywords' array MUST contain strictly exactly 5 relevant keywords.\n"
+            f"REMINDER 3: Place 'p_cta' dynamically where it fits the narrative — not forced after a fixed paragraph number.\n"
+            f"REMINDER 4: The paragraph before 'p_cta' must end with a curiosity hook. The 'p_cta' must open with 1-2 bridge sentences that directly echo the specific idea or language of that hook — never use generic filler phrases.\n"
         )
 
         print("[STEP] Entering prompt into textbox...", flush=True)
-        textbox.fill(prompt)
+        textbox.first.fill(prompt)
         custom_random_wait(15, 30)
 
         print("[STEP] Locating and clicking send button...", flush=True)
@@ -376,6 +432,17 @@ def run():
         raise
     except Exception as e:
         print("[ERROR]", e, flush=True)
+        # ============================================
+        # NEW: CAPTURE SCREENSHOT ON ERROR
+        # ============================================
+        if 'page' in locals() and page:
+            try:
+                screenshot_path = "error_screenshot.png"
+                page.screenshot(path=screenshot_path, full_page=True)
+                print(f"[OK] Error screenshot captured: {screenshot_path}", flush=True)
+            except Exception as screenshot_err:
+                print(f"[WARNING] Could not capture screenshot: {screenshot_err}", flush=True)
+        # ============================================
         if browser:
             try:
                 browser.close()

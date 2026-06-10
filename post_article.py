@@ -417,16 +417,6 @@ def run():
         final_publish_btn.click()
         print("[SUCCESS] Article successfully published!", flush=True)
 
-        # JSON file mein "posted": true append aur save karne ke liye
-        try:
-            print("[STEP] Appending 'posted': true to article.json...", flush=True)
-            article_data["posted"] = True
-            with open(ARTICLE_FILE, "w", encoding="utf-8") as f:
-                json.dump(article_data, f, indent=4, ensure_ascii=False)
-            print("[OK] article.json updated successfully at the bottom.", flush=True)
-        except Exception as json_err:
-            print(f"[WARNING] Could not update article.json: {json_err}", flush=True)
-
         long_publish_wait()
 
     except SystemExit:

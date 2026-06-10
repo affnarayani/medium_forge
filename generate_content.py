@@ -181,20 +181,6 @@ def run():
     # File init/clear at the beginning
     article_file = Path("article.json")
 
-    # Check if previous article is posted or if it's a completely fresh run
-    if article_file.exists():
-        try:
-            with article_file.open("r", encoding="utf-8") as f:
-                content = f.read().strip()
-                if content:  # Agar file khali nahi hai
-                    parsed_article = json.loads(content)
-                    # Agar "posted" key missing hai ya False hai
-                    if not parsed_article.get("posted"):
-                        print("[ABORT] Execution stopped: The previously generated article has not been posted yet.", flush=True)
-                        sys.exit(0)
-        except json.JSONDecodeError:
-            print("[INFO] 'article.json' contains invalid data, skipping safety check.", flush=True)
-
     with article_file.open("w", encoding="utf-8") as f:
         f.write("")
     print("[OK] 'article.json' cleared/initialized", flush=True)

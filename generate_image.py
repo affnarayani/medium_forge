@@ -136,16 +136,6 @@ def load_cookies(file_path: Path) -> List[Dict[str, Any]]:
 def run():
     article_file = Path("article.json")
     
-    if article_file.exists():
-        try:
-            with article_file.open("r", encoding="utf-8") as f:
-                data = json.load(f)
-                if data.get("posted") is True:
-                    print("[INFO] Article has already been posted. Skipping Image Generation.", flush=True)
-                    sys.exit(0)
-        except Exception as e:
-            print(f"[WARNING] Could not read article.json: {e}, proceeding anyway...", flush=True)
-    
     print("[START] Script started", flush=True)
 
     cookies = load_cookies(Path(CHATGPT_COOKIES_FILE))
@@ -154,7 +144,7 @@ def run():
     # LOAD ARTICLE DATA
     # =========================
     print("[STEP] Loading article JSON...", flush=True)
-    with open("article.json", "r", encoding="utf-8") as json_file:
+    with article_file.open("r", encoding="utf-8") as json_file:
         article_data = json.load(json_file)
     article_title = article_data["title"]
     print(f"[OK] Article Title extracted: {article_title}", flush=True)

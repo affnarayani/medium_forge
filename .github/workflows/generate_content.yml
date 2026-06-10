@@ -55,7 +55,7 @@ jobs:
     - name: Commit and Push Changes (If updated)
       run: |
         # Check karega ki article.json ya topics.txt mein koi change hua hai ya nahi
-        git add article.json topics.txt
+        git add article.json topics.txt status.json
         
         if git diff --staged --quiet; then
           echo "[INFO] No changes detected (Content might have been already posted or execution skipped). Skipping push."

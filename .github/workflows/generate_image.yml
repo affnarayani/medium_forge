@@ -59,7 +59,7 @@ jobs:
     - name: Commit and Push Generated Image (If downloaded)
       run: |
         # Check karega ki image/pin.png create ya update hui hai ya nahi
-        git add image/pin.png
+        git add image/pin.png status.json
         
         if git diff --staged --quiet; then
           echo "[INFO] No image changes detected. Skipping push."

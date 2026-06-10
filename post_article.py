@@ -21,7 +21,7 @@ from playwright_stealth import Stealth
 # =========================
 # CONFIG
 # =========================
-HEADLESS = True  
+HEADLESS = True
 
 MEDIUM_COOKIES_FILE = "medium_cookies.json.encrypted"
 ARTICLE_FILE = "article.json"
@@ -183,8 +183,8 @@ def run():
 
         print("[STEP] Opening Medium URL...", flush=True)
         page.goto(
-            "https://medium.com/new-story",
-            wait_until="networkidle"
+            "https://medium.com/new-story?source=home---two_column_layout_nav-----------------------------------------",
+            wait_until="load"
         )
         print("[OK] Medium URL opened completely (Logged In)", flush=True)
         custom_random_wait(6, 12)

@@ -130,7 +130,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-failure-screenshots
-          path: |
-            ./**/*.png
-            ./screenshot.png
+          path: clear_gpt_error_screenshot.png
           if-no-files-found: ignore

@@ -270,7 +270,17 @@ def run():
         except Exception as e:
             print(f"\n❌ [CRITICAL ERROR] Operation failed for {cookie_file.name}: {e}", flush=True)
             print("[STEP] Executing emergency browser teardown and exiting program via sys.exit(1)...", flush=True)
-            
+            # ============================================
+            # NEW: CAPTURE SCREENSHOT ON ERROR
+            # ============================================
+            if 'page' in locals() and page:
+                try:
+                    screenshot_path = "error_screenshot.png"
+                    page.screenshot(path=screenshot_path, full_page=True)
+                    print(f"[OK] Error screenshot captured: {screenshot_path}", flush=True)
+                except Exception as screenshot_err:
+                    print(f"[WARNING] Could not capture screenshot: {screenshot_err}", flush=True)
+            # ============================================
             if browser:
                 try:
                     browser.close()

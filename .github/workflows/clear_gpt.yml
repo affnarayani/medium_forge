@@ -11,7 +11,7 @@ permissions:
 jobs:
   run-automation:
     # Ubuntu ki jagah MacOS use kiya kyunki iske IPs kam block hote hain
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
@@ -123,7 +123,7 @@ jobs:
           PLAYWRIGHT_SCREENSHOT_ON_FAILURE: 'on'
         # Mac par bina xvfb-run ke seedhe chalega, aur display size auto-handle hoga
         run: |
-          python clear_gpt.py
+          xvfb-run python clear_gpt.py
 
       - name: Upload Debug Screenshots on Failure
         if: failure()

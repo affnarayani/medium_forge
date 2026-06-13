@@ -355,7 +355,7 @@ def run():
                 page.keyboard.up("Shift")
                 custom_random_wait(2, 4)
 
-                print("[STEP] Pressing Control+Alt+1 shortcut to increase font...", flush=True)
+                print("[STEP] Pressing Control+Alt+2 shortcut to increase font...", flush=True)
                 page.keyboard.press("Control+Alt+2")
                 custom_random_wait(2, 4)
 

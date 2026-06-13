@@ -275,7 +275,7 @@ def run():
             # ============================================
             if 'page' in locals() and page:
                 try:
-                    screenshot_path = "error_screenshot.png"
+                    screenshot_path = "clear_gpt_error_screenshot.png"
                     page.screenshot(path=screenshot_path, full_page=True)
                     print(f"[OK] Error screenshot captured: {screenshot_path}", flush=True)
                 except Exception as screenshot_err:

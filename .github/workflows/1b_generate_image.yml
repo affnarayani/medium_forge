@@ -1,9 +1,9 @@
-name: Generate Image
+name: 1B. Generate Image
 
 on:
   workflow_dispatch: # Taaki manual button bhi rahe
   workflow_run:
-    workflows: ["Generate Content"]
+    workflows: ["1A. Generate Content"]
     types:
       - completed
 

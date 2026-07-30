@@ -312,7 +312,7 @@ def run():
                 
                 custom_random_wait(2, 4)
                 
-                target_selection = "Click Here to Download This Ebook"
+                target_selection = "Click Here to Read More on This Topic"
                 
                 if target_selection in clean_display_text:
                     print(f"[STEP] Targeting exact anchor text string for selection...", flush=True)

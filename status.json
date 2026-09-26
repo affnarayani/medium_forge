@@ -1,4 +1,4 @@
 {
     "generate_content": true,
-    "generate_image": false
+    "generate_image": true
 }

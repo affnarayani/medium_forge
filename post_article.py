@@ -128,19 +128,25 @@ def load_article_data(file_path: str) -> Dict[str, Any]:
     with open(file_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
-def upload_to_tmpfiles(screenshot_path):
-    url = "https://tmpfiles.org/api/v1/upload"
+def upload_to_onlyfiles(screenshot_path):
+    url = "https://api.onlyfiles.com/v1/upload"
+    # File ko 48 ghante (172800 seconds) tak retain karna hai
+    expire_seconds = "172800"
     
     with open(screenshot_path, "rb") as file:
-        response = requests.post(url, files={"file": file})
+        response = requests.post(url, files={"file": file}, data={"expire": expire_seconds})
         
     if response.status_code == 200:
         res_data = response.json()
-        # Direct view URL banane ke liye '/dl/' replace karte hain
-        page_url = res_data["data"]["url"]
-        direct_url = page_url.replace("tmpfiles.org/", "tmpfiles.org/dl/")
-        print(f"👉 DIRECT LINK (Expires in 2 Hours): {direct_url}")
-        return direct_url
+        if res_data.get("status"):
+            # OnlyFiles response se direct file URL nikalte hain
+            direct_url = res_data["data"]["file"]["url"]["full"]
+            print(f"👉 DIRECT LINK (Expires in 48 Hours): {direct_url}")
+            return direct_url
+        else:
+            error_info = res_data.get("error", {})
+            print(f"[WARNING] Upload Failed: {error_info.get('message', 'Unknown error')}")
+            return None
     else:
         print(f"[WARNING] Upload Failed: {response.status_code}")
         return None
@@ -478,7 +484,7 @@ def run():
                 page.screenshot(path=screenshot_path, full_page=True)
                 print(f"[OK] Error screenshot captured: {screenshot_path}", flush=True)
                 
-                upload_to_tmpfiles(screenshot_path)
+                upload_to_onlyfiles(screenshot_path)
             except Exception as screenshot_err:
                 print(f"[WARNING] Could not capture or upload screenshot: {screenshot_err}", flush=True)
         

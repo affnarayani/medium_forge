@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import json
 import time
@@ -235,31 +236,49 @@ def run():
             if key == "p_cta" and "http" in para_text:
                 print(f"[STEP] Hyperlink formatting detected for p_cta", flush=True)
 
-                parts = para_text.split("http")
-                display_text = parts[0].strip()
-                target_url = "http" + parts[1].strip()
+                # Extract the target URL robustly regardless of link markup style:
+                # [url](url), [url], (url), or plain url
+                url_match = re.search(r"https?://[^\s\]]+", para_text)
+                target_url = (
+                    url_match.group(0).rstrip("]").rstrip(")").rstrip('"').strip()
+                    if url_match
+                    else ""
+                )
 
-                clean_display_text = display_text.replace(":", "").strip()
+                # Display text is everything before the link markup begins
+                link_start = len(para_text)
+                for marker in ("[", "("):
+                    pos = para_text.find(marker)
+                    if pos != -1 and pos < link_start:
+                        link_start = pos
+                http_pos = para_text.find("http")
+                if http_pos != -1 and http_pos < link_start:
+                    link_start = http_pos
 
-                for char in clean_display_text:
+                display_text = para_text[:link_start].strip()
+                # Remove trailing colon / whitespace that precedes the link
+                display_text = display_text.rstrip(": ").strip()
+
+                anchor_text = "Click Here to Read More on This Topic"
+
+                for char in display_text:
                     page.keyboard.type(char)
                     time.sleep(random.uniform(0.03, 0.12))
 
                 custom_random_wait(MIN_RANDOM_WAIT_SHORT_2, MAX_RANDOM_WAIT_SHORT_2)
 
-                target_selection = "Click Here to Read More on This Topic"
-
-                if target_selection in clean_display_text:
-                    print(f"[STEP] Targeting exact anchor text string for selection...", flush=True)
+                # Select only the anchor text so the hyperlink applies to it, not the link
+                if anchor_text in display_text:
+                    print(f"[STEP] Selecting anchor text for hyperlink...", flush=True)
                     page.keyboard.down("Shift")
-                    for _ in range(len(target_selection)):
+                    for _ in range(len(anchor_text)):
                         page.keyboard.press("ArrowLeft")
                         time.sleep(0.02)
                     page.keyboard.up("Shift")
                 else:
-                    print(f"[WARNING] Exact anchor match not found, falling back to full block selection...", flush=True)
+                    print(f"[WARNING] Anchor text not found, selecting last {len(anchor_text)} chars", flush=True)
                     page.keyboard.down("Shift")
-                    for _ in range(len(clean_display_text)):
+                    for _ in range(len(anchor_text)):
                         page.keyboard.press("ArrowLeft")
                         time.sleep(0.02)
                     page.keyboard.up("Shift")
@@ -280,7 +299,7 @@ def run():
                     link_input.fill(target_url)
                 custom_random_wait(MIN_RANDOM_WAIT_SHORT, MAX_RANDOM_WAIT_SHORT)
 
-                print(f"[STEP] Pressing 1st Enter to embed/save the link...", flush=True)
+                print(f"[STEP] Pressing Enter to embed/save the link...", flush=True)
                 if link_input is not None:
                     link_input.press("Enter")
                 custom_random_wait(MIN_RANDOM_WAIT_SHORT, MAX_RANDOM_WAIT_SHORT)

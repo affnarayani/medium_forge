@@ -1,0 +1,38 @@
+# ============================================================
+# Medium Platform Locators (medium.com)
+# Format: locator_name = page.<playwright_expression>
+# Duplicate names: first entry is primary, subsequent same-named entries are fallbacks.
+# All expressions are checked immediately; first match wins (no waiting on timeouts).
+# Editor flow: headerWriteButton -> editorTitleParagraph -> editorAddButton ->
+#              Add an image -> caption -> paragraphs -> Publish -> topics -> Publish
+# ============================================================
+
+# --- Header / editor entry ---
+medium_header_write_button = page.get_by_test_id('headerWriteButton')
+
+# --- Title input ---
+medium_title_paragraph = page.get_by_test_id('editorTitleParagraph')
+
+# --- Add button (image / media menu) ---
+medium_editor_add_button = page.get_by_test_id('editorAddButton')
+
+# --- Image upload ---
+medium_add_image_button = page.get_by_role('button', name='Add an image', exact=True)
+
+# --- Image caption / alt text ---
+medium_image_caption = page.get_by_text('Type caption for image (', exact=False)
+
+# --- Hyperlink action button (inside editor toolbar) ---
+medium_link_action_button = page.locator('button[data-action="link"]')
+
+# --- Hyperlink URL input ---
+medium_link_url_input = page.get_by_role('textbox', name='Paste or type a link…')
+
+# --- Topic / keyword combobox ---
+medium_topic_combobox = page.get_by_role('combobox', name='Add a topic...')
+
+# --- Publish trigger (primary dropdown) ---
+medium_publish_button = page.get_by_role('button', name='Publish', exact=True)
+
+# --- Final publish confirmation button ---
+medium_publish_confirm_button = page.get_by_role('button', name='Publish', exact=True)
